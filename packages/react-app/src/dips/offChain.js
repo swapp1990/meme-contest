@@ -4,31 +4,17 @@ import { ethers } from "ethers";
 import Web3Modal from "web3modal";
 import axios from "axios";
 import Diplomat from "../contracts/hardhat_contracts.json";
-
-export const serverUrl = process.env.REACT_APP_API_URL || "http://localhost:45622/";
+import { serverUrl } from "./baseHandler";
+import { getNetwork } from "./helpers";
 
 export default function OffChain(tx, readContracts, writeContracts, mainnetProvider, address, userSigner) {
   const createElection = async ({ name, candidates, fundAmount, tokenAdr, votes, kind }) => {
-    const web3Modal = new Web3Modal();
-    const connection = await web3Modal.connect();
-    const provider = new ethers.providers.Web3Provider(connection);
-    const signer = provider.getSigner();
-    const network = await provider.getNetwork();
-    let contract = new ethers.Contract(
-      Diplomat[network.chainId][network.name].contracts.Diplomat.address,
-      Diplomat[network.chainId][network.name].contracts.Diplomat.abi,
-      signer,
-    );
-    let transaction = await contract.createElection(name, candidates, fundAmount, tokenAdr, votes, kind);
-    const receipt = await transaction.wait();
-    console.log(address);
-    const onChainElectionId = receipt.events[0].args.electionId.toNumber();
+    const { network, provider, signer } = await getNetwork();
     const message = "qdip-create-" + address;
     const signature = await provider.send("personal_sign", [message, address]);
-    console.log("new election created", onChainElectionId);
     const result = await axios.post(serverUrl + "distributions", {
-      onChainElectionId,
       name,
+      creator: address,
       candidates,
       fundAmount,
       tokenAdr,
@@ -37,49 +23,20 @@ export default function OffChain(tx, readContracts, writeContracts, mainnetProvi
       address,
       signature,
     });
-    console.log(result.data);
-    return result.data.success;
-    // // const result = await
-    // return new Promise((resolve, reject) => {
-    //   tx(
-    //     writeContracts.Diplomat.createElection(name, candidates, fundAmount, tokenAdr, votes, kind, {
-    //       gasLimit: 12450000,
-    //     }),
-    //     async update => {
-    //       console.log("📡 Transaction Update:", update);
-    //       if (update && (update.status === "confirmed" || update.status === 1)) {
-    //         if (typeof result.wait === "function") {
-    //           const receipt = await update.wait();
-    //           console.log(address);
-    //           const onChainElectionId = receipt.events[0].args.electionId.toNumber();
-    //           const message = "qdip-create-" + address;
-    //           const signature = await userSigner.provider.send("personal_sign", [message, address]);
-    //           console.log("new election created", onChainElectionId);
-    //           return axios
-    //             .post(serverUrl + "distributions", {
-    //               onChainElectionId,
-    //               name,
-    //               candidates,
-    //               fundAmount,
-    //               tokenAdr,
-    //               votes,
-    //               kind,
-    //               address,
-    //               signature,
-    //             })
-    //             .then(res => {
-    //               console.log(res.data, res.data.success);
-    //               resolve(res.data.success);
-    //             })
-    //             .catch(reject);
-    //         }
-    //         resolve(update);
-    //       } else {
-    //         reject(update);
-    //       }
-    //     },
-    //   );
-    // });
+
+    const electionId = result.data.electionId;
+
+    let contract = new ethers.Contract(
+      Diplomat[network.chainId][network.name].contracts.Diplomat.address,
+      Diplomat[network.chainId][network.name].contracts.Diplomat.abi,
+      signer,
+    );
+
+    let transaction = await contract.createElection(electionId);
+    const receipt = await transaction.wait();
+    const id = receipt.events[0].args.electionId;
+
+    return electionId; //result.data.success;
   };
 
   const endElection = async id => {
@@ -145,7 +102,7 @@ export default function OffChain(tx, readContracts, writeContracts, mainnetProvi
       const offChainElectionResult = await axios.get(serverUrl + `distribution/${id}`);
       const { election: offChainElection } = offChainElectionResult.data;
       console.log({ offChainElection });
-      const nVoted = Object.keys(offChainElection.votes).length + 1;
+      const nVoted = Object.keys(offChainElection.votes).length;
 
       const tags = [];
       if (election.creator === address) {
@@ -175,60 +132,96 @@ export default function OffChain(tx, readContracts, writeContracts, mainnetProvi
   };
 
   const getElectionStateById = async id => {
-    let election = {};
-    let loadedElection = await readContracts.Diplomat.getElection(id);
-    election = { ...loadedElection };
-    election.isPaid = loadedElection.paid;
-    election.fundingAmount = fromWei(loadedElection.amount.toString(), "ether");
-    election.isCandidate = loadedElection.candidates.includes(address);
-    election.isAdmin = loadedElection.creator === address;
+    // TODO: make get request to backend and return election formatted
+    let fb = await axios.get(serverUrl + `distributions/${id}`); //await readContracts.Diplomat.getElection(id);
 
-    const votedResult = await axios.get(serverUrl + `distribution/state/${id}/${address}`);
-    const { hasVoted, isActive } = votedResult.data;
-    election.canVote = !hasVoted && election.isCandidate;
-    console.log({ isActive });
-    election.active = isActive;
-    return election;
+    const addressElectionState = await axios.get(serverUrl + `distribution/state/${id}/${address}`);
+    const hasVoted = addressElectionState.data.hasVoted;
+    const nVoted = addressElectionState.data.nVoted;
+    const isAdmin = address === fb.data.creator;
+    const isCandidate = fb.data.candidates.includes(address);
+
+    const tags = [];
+    if (hasVoted) {
+      tags.push("voted");
+    }
+    if (isAdmin) {
+      tags.push("admin");
+    }
+    if (isCandidate) {
+      tags.push("candidate");
+    }
+
+    const formattedElection = {
+      ...fb.data,
+      id: id,
+      created_date: new Date().toLocaleDateString(), // TODO: Update date
+      n_voted: { n_voted: nVoted, outOf: fb.data.candidates.length },
+      isCandidate: isCandidate,
+      isAdmin: isAdmin,
+      isPaid: fb.data.paid,
+      canVote: !hasVoted && isCandidate,
+      tags: tags,
+    };
+
+    console.log({ formattedElection });
+    return formattedElection;
   };
 
   const getCandidatesScores = async id => {
-    let onChainElection = await readContracts.Diplomat.getElection(id);
-    const offChainElectionResult = await axios.get(serverUrl + `distribution/${id}`);
-    const { election: offChainElection } = offChainElectionResult.data;
+    console.log("HERE!");
+    // TODO: get candidate scores from backend
+    // let onChainElection = await readContracts.Diplomat.getElection(id);
+    const offChainElectionResult = await axios.get(serverUrl + `distributions/${id}`);
+    console.log(offChainElectionResult);
+    const election = offChainElectionResult.data;
+    console.log({ election });
+
     let totalScores = [];
-    for (const candidateVotes of Object.values(offChainElection.votes)) {
-      candidateVotes.forEach((voteScore, i) => {
-        if (totalScores[i] !== 0 && !totalScores[i]) {
-          return totalScores.push(voteScore);
-        }
-        totalScores[i] = totalScores[i] + voteScore;
-      });
+    if (Object.values(election.votes).length > 0) {
+      for (const candidateVotes of Object.values(election.votes)) {
+        candidateVotes.forEach((voteScore, i) => {
+          if (totalScores[i] !== 0 && !totalScores[i]) {
+            return totalScores.push(voteScore);
+          }
+          totalScores[i] = totalScores[i] + voteScore;
+        });
+      }
     }
 
+    // return totalScores;
+    // let fb = await axios.get(serverUrl + `distributions/${id}`); //await readContracts.Diplomat.getElection(id);
+    // console.log({ fb });
+    // const scores = Object.values(fb);
+    console.log({ totalScores });
     return totalScores;
   };
 
   const getFinalPayout = async id => {
-    const election = await readContracts.Diplomat.getElection(id);
-    const electionFunding = election.amount;
-    const offChainElectionResult = await axios.get(serverUrl + `distribution/${id}`);
-    const { election: offChainElection } = offChainElectionResult.data;
+    // const election = await readContracts.Diplomat.getElection(id);
+    let election = await axios.get(serverUrl + `distributions/${id}`); //await readContracts.Diplomat.getElection(id);
+    console.log({ election });
+    const electionFunding = election.data.fundAmount;
+    // const offChainElectionResult = await axios.get(serverUrl + `distribution/${id}`);
+    // const { election: offChainElection } = offChainElectionResult.data;
 
     let totalScores = await getCandidatesScores(id);
     let payout = [];
     let totalScoresSum = totalScores.reduce((sum, curr) => sum + curr, 0);
     console.log({ totalScoresSum });
+    let scores = [];
 
-    // for (let i = 0; i < election.candidates.length; i++) {
-    //   const candidateScore = offChainElection.votes[election.candidates[i]];
-    //   console.log({ candidateScore });
-    //   if (!candidateScore) {
-    //     scores.push(candidateScore);
-    //     scoreSum += candidateScore;
-    //   } else {
-    //     scores.push(0);
-    //   }
-    // }
+    for (let i = 0; i < election.data.candidates.length; i++) {
+      const candidateScore = election.data.votes[election.data.candidates[i]];
+      console.log({ candidateScore });
+      let scoreSum = 0;
+      if (!candidateScore) {
+        scores.push(candidateScore);
+        scoreSum += candidateScore;
+      } else {
+        scores.push(0);
+      }
+    }
 
     for (let i = 0; i < totalScores.length; i++) {
       const candidatePay = Math.floor((totalScores[i] / totalScoresSum) * electionFunding);
@@ -245,27 +238,36 @@ export default function OffChain(tx, readContracts, writeContracts, mainnetProvi
     };
   };
 
-  const distributeEth = async (id, adrs, weiDist, totalValueInWei) => {
-    console.log("Distributing...");
-    return new Promise((resolve, reject) => {
-      tx(
-        writeContracts.Diplomat.payElection(id, adrs, weiDist, {
-          value: totalValueInWei,
-        }),
-        update => {
-          console.log("📡 Transaction Update:", update);
-          if (update) {
-            if (update.status === "confirmed" || update.status === 1) {
-              resolve(update);
-            } else if (!update.status) {
-              reject(update);
-            }
-          } else {
-            reject(update);
-          }
-        },
-      );
+  const distributeEth = async ({ id, candidates, payoutInWei, totalValueInWei, tokenAddress }) => {
+    console.log("Distributing..." + totalValueInWei);
+    const { provider, signer, network } = await getNetwork();
+    const contract = new ethers.Contract(
+      Diplomat[network.chainId][network.name].contracts.Diplomat.address,
+      Diplomat[network.chainId][network.name].contracts.Diplomat.abi,
+      signer,
+    );
+
+    const transaction = await contract.payElection(id, candidates, payoutInWei, tokenAddress, {
+      value: totalValueInWei,
     });
+    const receipt = await transaction.wait();
+
+    return axios
+      .post(serverUrl + "distributions/" + id + "/pay", {
+        address: address,
+      })
+      .then(response => {
+        // console.log(response);
+        if (response.status == 200) {
+          return response.statusText;
+        } else {
+          throw response;
+        }
+      })
+      .catch(e => {
+        console.log("Error on 'distrubuteEth' distributions post");
+        throw e;
+      });
   };
 
   const sendBackendOnCreate = async (newElection, address) => {};

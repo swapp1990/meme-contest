@@ -1,7 +1,7 @@
 import axios from "axios";
 import React, { useState, useEffect, useRef } from "react";
 import { fromWei, toWei, toBN, numberToHex } from "web3-utils";
-import { serverUrl } from "./offChain";
+import { serverUrl } from "./baseHandler";
 
 export default function OnChain(tx, readContracts, writeContracts, mainnetProvider, address, userSigner) {
   const createElection = async data => {
@@ -95,7 +95,7 @@ export default function OnChain(tx, readContracts, writeContracts, mainnetProvid
       if (election.kind === "offChain") {
         const offChainElections = await axios.get(serverUrl + "distributions");
         console.log({ offChainElections });
-        const electionExists = offChainElections.data.some(offChainElec => offChainElec.data.onChainElectionId === i);
+        const electionExists = offChainElections.data.some(offChainElec => offChainElec.data.id === i);
         if (!electionExists) {
           continue;
         }

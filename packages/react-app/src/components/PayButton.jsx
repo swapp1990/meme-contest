@@ -21,11 +21,30 @@ export default function PayButton({
   ethPayHandler,
   tokenPayHandler,
 }) {
+  console.log({
+    token,
+    tokenAddr,
+    amount,
+    appName,
+    spender,
+    style,
+    callerAddress,
+    maxApproval,
+    readContracts,
+    writeContracts,
+    yourLocalBalance,
+    tokenListHandler,
+    ethPayHandler,
+    tokenPayHandler,
+  });
   const [tokenInfo, setTokenInfo] = useState({});
   const [status, setStatus] = useState(0); // loading | lowAllowance | approving | ready | distributing | noBalance
 
   const refreshETH = () => {
-    setStatus(yourLocalBalance.gte(ethers.utils.parseEther(amount || "0")) ? 3 : 5);
+    console.log(yourLocalBalance.toString(), ethers.utils.parseEther(amount).toString());
+    // let ylb = yourLocalBalance.gte(ethers.utils.parseEther(amount || "0")) ? 3 : 5;
+
+    setStatus(3);
   };
 
   const refreshTokenDetails = async () => {
@@ -90,24 +109,16 @@ export default function PayButton({
         });
     } else {
       if (status === 1) {
+        setStatus(3);
         await approveTokenAllowance();
-      } else {
         setStatus(4);
+      } else {
+        setStatus(1);
         await tokenPayHandler(payParams);
         await refreshTokenDetails();
+        setStatus(4);
       }
     }
-    // if (isETH()) {
-    //   setStatus(4);
-    //   await ethPayHandler();
-    //   setStatus(3);
-    // } else if (isMATIC()) {
-    //   setStatus(4);
-    //   await ethPayHandler();
-    //   setStatus(3);
-    // } else {
-
-    // }
   };
 
   useEffect(() => {
@@ -148,6 +159,7 @@ export default function PayButton({
   const renderButtonText = () => {
     let text = "Loading...";
 
+    console.log({ status });
     switch (status) {
       case 1:
         text = `Approve ${appName} to transfer ${token}`;

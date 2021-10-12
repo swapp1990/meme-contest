@@ -24,14 +24,17 @@ import {
 } from "@ant-design/icons";
 import { Address, AddressInput } from "../components";
 import dips from "../dips";
+import BaseHandler from "../dips/baseHandler";
 import { mainnetProvider, blockExplorer } from "../App";
+import { CERAMIC_PREFIX } from "../dips/helpers";
 
 export default function Home({ tx, readContracts, writeContracts, mainnetProvider, address }) {
   /***** Routes *****/
   const routeHistory = useHistory();
   const viewElection = record => {
-    // console.log({ record });
-    routeHistory.push("/vote/" + record.id);
+    const isCeramicRecord = record.id.startsWith(CERAMIC_PREFIX);
+    const electionId = isCeramicRecord ? record.id.split(CERAMIC_PREFIX)[1] : record.id;
+    routeHistory.push("/vote/" + electionId + `?kind=${isCeramicRecord ? "ceramic" : "offChain"}`);
   };
 
   const createElection = () => {
@@ -40,7 +43,7 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
 
   /***** States *****/
 
-  const [selectedQdip, setSelectedQdip] = useState("onChain");
+  const [selectedQdip, setSelectedQdip] = useState("base");
   const [qdipHandler, setQdipHandler] = useState();
   const [electionsMap, setElectionsMap] = useState();
   const [tableDataLoading, setTableDataLoading] = useState(false);
@@ -58,9 +61,7 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
   useEffect(() => {
     (async () => {
       if (qdipHandler) {
-        console.log("get elections");
         let electionsMap = await qdipHandler.getElections();
-        console.log(electionsMap);
         setElectionsMap(electionsMap);
       }
     })();
@@ -68,7 +69,8 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
 
   /***** Methods *****/
   const init = async () => {
-    setQdipHandler(dips[selectedQdip].handler(tx, readContracts, writeContracts, mainnetProvider, address));
+    // TODO: Investigate if this ever needs to be anything other than the baseHandler
+    setQdipHandler(BaseHandler(tx, readContracts, writeContracts, mainnetProvider, address));
   };
 
   /***** Render *****/
@@ -111,11 +113,7 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
       key: "n_voted",
       align: "center",
       width: 100,
-      render: p => (
-        <Typography.Text>
-          {p.n_voted} / {p.outOf}
-        </Typography.Text>
-      ),
+      render: p => <Typography.Text>{`${p.n_voted} / ${p.outOf}`}</Typography.Text>,
     };
   };
   const statusCol = () => {
@@ -134,7 +132,9 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
       dataIndex: "tags",
       key: "tags",
       align: "center",
-      render: tags =>
+      render: (
+        tags, //["yeah"],
+      ) =>
         tags.map(r => {
           let color = "orange";
           if (r == "candidate") {

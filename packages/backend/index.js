@@ -8,35 +8,32 @@ const bodyParser = require("body-parser");
 const app = express();
 
 // MY INFURA_ID, SWAP IN YOURS FROM https://infura.io/dashboard/ethereum
-const INFURA_ID = "460f40a260564ac4a4f4b3fffb032dad";
+const INFURA_ID = process.env.INFURA_ID; //"460f40a260564ac4a4f4b3fffb032dad";
 const PORT = process.env.PORT || 45622;
 /// 📡 What chain are your contracts deployed to?
 
+// const targetNetwork = {
+//   name: "rinkeby",
+//   color: "#e0d068",
+//   chainId: 4,
+//   rpcUrl: `https://rinkeby.infura.io/v3/${INFURA_ID}`,
+//   faucet: "https://faucet.rinkeby.io/",
+//   blockExplorer: "https://rinkeby.etherscan.io/",
+// };
+// const targetNetwork = {
+//     name: "mainnet",
+//     color: "#ff8b9e",
+//     chainId: 1,
+//     rpcUrl: `https://mainnet.infura.io/v3/${INFURA_ID}`,
+//     blockExplorer: "https://etherscan.io/",
+//   };
 const targetNetwork = {
-  name: "rinkeby",
-  color: "#e0d068",
-  chainId: 4,
-  rpcUrl: `https://rinkeby.infura.io/v3/${INFURA_ID}`,
-  faucet: "https://faucet.rinkeby.io/",
-  blockExplorer: "https://rinkeby.etherscan.io/",
+  name: "localhost",
+  color: "#666666",
+  chainId: 31337,
+  blockExplorer: "",
+  rpcUrl: "http://localhost:8545",
 };
-
-/*
-const targetNetwork = {
-    name: "mainnet",
-    color: "#ff8b9e",
-    chainId: 1,
-    rpcUrl: `https://mainnet.infura.io/v3/${INFURA_ID}`,
-    blockExplorer: "https://etherscan.io/",
-  };
- const targetNetwork = {
-   name: "localhost",
-   color: "#666666",
-   chainId: 31337,
-   blockExplorer: "",
-   rpcUrl: "http://localhost:8545",
-};
-*/
 
 // 🏠 Your local provider is usually pointed at your local blockchain
 const localProviderUrl = targetNetwork.rpcUrl;
@@ -49,7 +46,7 @@ const isElectionCandidates = async (candidatesToCheck, electionId) => {
   const providerNetwork = await localProvider.getNetwork();
   const _chainId = providerNetwork.chainId;
 
-  contractList = require("./contracts.json");
+  contractList = require("./hardhat_contracts.json");
   console.log({ contractList });
 
   const contractData =
@@ -69,7 +66,7 @@ const isAdmin = async (address) => {
   const providerNetwork = await localProvider.getNetwork();
   const _chainId = providerNetwork.chainId;
 
-  contractList = require("./contracts.json");
+  contractList = require("./hardhat_contracts.json");
 
   const contractData =
     contractList[_chainId][targetNetwork.name].contracts.Diplomat;
@@ -109,6 +106,7 @@ app.use(
       const validPatternRegexes = [
         /^(.*)qd-web-staging.herokuapp.com(\/(.*)|)$/,
         /^(www.|)qd-web-staging.herokuapp.com(\/(.*)|)$/,
+        /^http:\/\/localhost:[0-9]{4}$/,
       ];
       if (validPatternRegexes.some((rx) => rx.test(origin)) || !origin) {
         callback(null, true);
@@ -141,8 +139,8 @@ app.post("/distributions", async function (request, response) {
 
   try {
     const resAdd = await db.collection("distributions").add({
-      onChainElectionId: request.body.onChainElectionId,
       name: request.body.name,
+      creator: request.body.creator,
       candidates: request.body.candidates,
       fundAmount: request.body.fundAmount,
       tokenAdr: request.body.tokenAdr,
@@ -158,7 +156,7 @@ app.post("/distributions", async function (request, response) {
 
     console.log({ resAdd });
     console.log(resAdd.id);
-    return response.status(201).send(resAdd);
+    return response.status(201).send({ electionId: resAdd.id });
   } catch (exception) {
     console.log(exception);
     return response.status(500).send("Error creating distribution");
@@ -259,11 +257,11 @@ app.get("/distributions/:distributionId", async function (request, response) {
     .collection("distributions")
     .doc(request.params.distributionId);
   const distribution = await distributionRef.get();
-
-  if (!distribution.exists) {
-    response.status(404).send("Distribution not found");
+  // console.log(distribution.data());
+  if (!distribution) {
+    return response.status(404).send("Distribution not found");
   } else {
-    response.send(distribution);
+    return response.send(distribution.data());
   }
 });
 
@@ -284,7 +282,7 @@ app.post(
       request.body.signature
     );
 
-    console.log(recovered, request.body.address);
+    // console.log(recovered, request.body.address);
 
     if (recovered !== request.body.address) {
       console.log("Wrong signature");
@@ -300,33 +298,33 @@ app.post(
     }
 
     // save vote to db
-    const electionSnapshot = await db
+    console.log(request.params);
+    const electionSnapshotRef = await db
       .collection("distributions")
-      .where(
-        "onChainElectionId",
-        "==",
-        parseInt(request.params.distributionId, 10)
-      )
-      .get();
-    const distribution = electionSnapshot.docs[0];
+      .doc(request.params.distributionId);
+
+    const distribution = await electionSnapshotRef.get();
     console.log(distribution.data());
-    const distributionRef = distribution.ref;
+    if (!distribution) {
+      return response.status(404).send("Distribution not found");
+    }
 
     const { scores } = request.body;
+    console.log({ scores });
 
     let votes = distribution.data().votes;
 
     let votesSignatures = distribution.data().votesSignatures;
 
-    // Check if all votes are to members
-    const isValidBallot = await isElectionCandidates(
-      request.body.candidates,
-      request.params.distributionId
-    );
-    console.log(isValidBallot);
-    if (!isValidBallot) {
-      return response.status(401).send("Invalid ballot");
-    }
+    // TODO: Check if all votes are to members
+    // const isValidBallot = await isElectionCandidates(
+    //   request.body.candidates,
+    //   request.params.distributionId
+    // );
+    // console.log(isValidBallot);
+    // if (!isValidBallot) {
+    //   return response.status(401).send("Invalid ballot");
+    // }
 
     // TODO: Check if the total votes are equal or less than the vote allocation
     // const reducer = (previousValue, currentValue) =>
@@ -339,7 +337,7 @@ app.post(
     votes[recovered] = request.body.scores;
     votesSignatures[recovered] = request.body.signature;
 
-    const res = await distributionRef.update({
+    const res = await electionSnapshotRef.update({
       votes: votes,
       votesSignatures: votesSignatures,
     });
@@ -376,17 +374,22 @@ app.post(
     //   return response.status(401).send("No admin in contract");
     // }
 
-    const electionSnapshot = await db
-      .collection("distributions")
-      .where(
-        "onChainElectionId",
-        "==",
-        parseInt(request.params.distributionId, 10)
-      )
-      .get();
-    const distribution = electionSnapshot.docs[0];
+    // const electionSnapshot = await db
+    //   .collection("distributions")
+    //   .where("id", "==", parseInt(request.params.distributionId, 10))
+    //   .get();
+    // const distribution = electionSnapshot.docs[0];
 
-    if (!distribution.exists) {
+    const electionSnapshotRef = await db
+      .collection("distributions")
+      .doc(request.params.distributionId);
+
+    const distribution = await electionSnapshotRef.get();
+    console.log(distribution.data());
+    if (!distribution) {
+      return response.status(404).send("Distribution not found");
+    }
+    if (!distribution) {
       return response.status(400).send("Distribution not found");
     } else {
       console.log(distribution.data());
@@ -397,31 +400,94 @@ app.post(
     }
   }
 );
+app.post(
+  "/distributions/:distributionId/pay",
+  async function (request, response) {
+    const electionSnapshotRef = await db
+      .collection("distributions")
+      .doc(request.params.distributionId);
+
+    // console.log({ request });
+
+    const distribution = await electionSnapshotRef.get();
+    console.log(distribution);
+    if (!distribution) {
+      return response.status(404).send("Distribution not found");
+    }
+    if (!distribution) {
+      return response.status(400).send("Distribution not found");
+    } else {
+      console.log(distribution.data());
+      // const distributionRef = distribution.ref;
+      const res = await distribution.ref.update({ paid: true });
+
+      return response.send(res);
+    }
+  }
+);
+
+app.get("/distributions/ids/:ids", async (req, res, next) => {
+  console.log(req.body.firebaseElectionIds);
+  const ids = req.params.ids.split(",");
+  const electionSnapshotRefs = await Promise.all(
+    ids.map((id) => {
+      return db.collection("distributions").doc(id);
+    })
+  );
+  console.log({ electionSnapshotRefs });
+  const elections = await Promise.all(
+    electionSnapshotRefs.map((ref) => {
+      return ref.get();
+    })
+  );
+  console.log({ elections });
+  // await db
+  //   .collection("distributions")
+  //   .where("id", "array-contains", req.body.firebaseElectionIds)
+  //   .get();
+  if (elections.length === 0) {
+    console.log("In if");
+    return res.status(404);
+  }
+
+  let data = [];
+
+  elections.forEach((doc) => {
+    data.push({
+      id: doc.id,
+      createdAt: doc.createTime.toString(),
+      data: doc.data(),
+    });
+  });
+
+  console.log({ data });
+  return res.send(data);
+});
 
 app.get(
   "/distribution/state/:distributionId/:address",
   async (req, res, next) => {
     const electionSnapshot = await db
       .collection("distributions")
-      .where("onChainElectionId", "==", parseInt(req.params.distributionId, 10))
+      .doc(req.params.distributionId)
       .get();
-    if (!electionSnapshot || !electionSnapshot.docs[0]) {
+    if (!electionSnapshot || !electionSnapshot.data()) {
       return res.status(404);
     }
-    console.log("wtf", electionSnapshot.docs[0].data());
-    const election = electionSnapshot.docs[0].data();
+    const election = electionSnapshot.data();
     const hasVoted = Object.keys(election.votes).some(
       (voterAddress) => voterAddress === req.params.address
     );
+    const nVoted = Object.keys(election.votes).length;
     const isActive = election.active;
-    return res.send({ hasVoted, isActive });
+    return res.send({ hasVoted, isActive, nVoted });
   }
 );
 
 app.get("/distribution/:distributionId", async (req, res, next) => {
   const electionSnapshot = await db
     .collection("distributions")
-    .where("onChainElectionId", "==", parseInt(req.params.distributionId, 10))
+    .where("id", "==", parseInt(req.params.distributionId, 10))
     .get();
 
   if (!electionSnapshot || !electionSnapshot.docs[0]) {
