@@ -84,7 +84,7 @@ export default function Create({
     votes: 5,
     tokenAdr: "0x0000000000000000000000000000000000000000",
     tokenName: "",
-    kind: "offChain",
+    kind: "ceramic",
     candidates: [],
   });
   const [steps, setSteps] = useState([]);
