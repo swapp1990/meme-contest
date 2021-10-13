@@ -88,7 +88,6 @@ export default function Create({
     candidates: [],
   });
   const [steps, setSteps] = useState([]);
-
   const { Step } = Steps;
   const [formStep1, formStep2] = Form.useForm();
 
