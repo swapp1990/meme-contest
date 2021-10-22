@@ -1,11 +1,11 @@
 {
-  "4": {
-    "rinkeby": {
-      "name": "rinkeby",
-      "chainId": "4",
+  "31337": {
+    "localhost": {
+      "name": "localhost",
+      "chainId": "31337",
       "contracts": {
         "Diplomat": {
-          "address": "0xdAb307Ccb90FC9697867AbB451216341D940D6D7",
+          "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
           "abi": [
             {
               "inputs": [],

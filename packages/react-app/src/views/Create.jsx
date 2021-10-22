@@ -66,7 +66,7 @@ export default function Create({
   const viewElection = async () => {
     const isCeramicRecord = createdElectionId.startsWith(CERAMIC_PREFIX);
     const electionId = isCeramicRecord ? createdElectionId.split(CERAMIC_PREFIX)[1] : createdElectionId;
-    routeHistory.push("/vote/" + electionId + `?kind=${isCeramicRecord ? "ceramic" : "offChain"}`);
+    routeHistory.push("/contest/" + electionId + `?kind=${isCeramicRecord ? "ceramic" : "offChain"}`);
   };
 
   /***** States *****/
@@ -84,7 +84,7 @@ export default function Create({
     votes: 5,
     tokenAdr: "0x0000000000000000000000000000000000000000",
     tokenName: "",
-    kind: "offChain",
+    kind: "ceramic",
     candidates: [],
   });
   const [steps, setSteps] = useState([]);
@@ -145,15 +145,15 @@ export default function Create({
     // });
     const steps = [
       {
-        title: "Election Details",
+        title: "Contest Details",
         content: <Step1 mainnetProvider={mainnetProvider} election={newElection} form={formStep1} />,
       },
-      {
-        title: "Add Candidates",
-        content: (
-          <Step2 mainnetProvider={mainnetProvider} election={newElection} form={formStep2} errorMsg={errorMsg} />
-        ),
-      },
+      //   {
+      //     title: "Add Candidates",
+      //     content: (
+      //       <Step2 mainnetProvider={mainnetProvider} election={newElection} form={formStep2} errorMsg={errorMsg} />
+      //     ),
+      //   },
       {
         title: "Review & Confirm",
         content: <Step3 mainnetProvider={mainnetProvider} election={newElection} />,
@@ -214,8 +214,8 @@ export default function Create({
         >
           <Form.Item
             name="elec_name"
-            label="Election Name"
-            rules={[{ required: true, message: "Please input election name!" }]}
+            label="Contest Name"
+            rules={[{ required: true, message: "Please input contest name!" }]}
           >
             <Input
               size="large"
@@ -259,7 +259,7 @@ export default function Create({
 
           <Form.Item
             name="votes"
-            label="Vote Delegation"
+            label="Vote Allocation"
             rules={[
               { required: true, message: "Please input number of votes!" },
               { pattern: new RegExp(/^[0-9]+$/), message: "Invalid Vote Allocation!" },
@@ -299,40 +299,6 @@ export default function Create({
     const [toAddress, setToAddress] = useState("");
 
     const handleAddVoters = async () => {
-      const text = await navigator.clipboard.readText();
-      const addresses = text.split(",");
-
-      const candidates = newElection.candidates.slice();
-
-      addresses.forEach(voteAddress => {
-        try {
-          const voteAddressWithChecksum = ethers.utils.getAddress(voteAddress);
-          if (!candidates.includes(voteAddressWithChecksum)) {
-            candidates.push(voteAddressWithChecksum);
-          }
-        } catch (error) {
-          console.log(error);
-        }
-      });
-      newElection.candidates = candidates;
-    };
-    const handleAddVotersCSV = async () => {
-      // const text = await navigator.clipboard.readText();
-      // const addresses = text.split(",");
-      // const candidates = newElection.candidates.slice();
-      // addresses.forEach(voteAddress => {
-      //   try {
-      //     const voteAddressWithChecksum = ethers.utils.getAddress(voteAddress);
-      //     if (!candidates.includes(voteAddressWithChecksum)) {
-      //       candidates.push(voteAddressWithChecksum);
-      //     }
-      //   } catch (error) {
-      //     console.log(error);
-      //   }
-      // });
-      // newElection.candidates = candidates;
-    };
-    const handleAddVotersPaste = async () => {
       const text = await navigator.clipboard.readText();
       const addresses = text.split(",");
 
@@ -441,27 +407,11 @@ export default function Create({
     return (
       <>
         <Descriptions bordered style={{ margin: "2em 5em" }} column={1} size="small">
-          <Descriptions.Item label="Election Name:">{newElection.name}</Descriptions.Item>
+          <Descriptions.Item label="Contest Name:">{newElection.name}</Descriptions.Item>
           <Descriptions.Item label="Allocated Funds:">
             {fromWei(newElection.fundAmount ? newElection.fundAmount.toString() : "0") + " " + newElection.funds}
           </Descriptions.Item>
           <Descriptions.Item label="Delegated Votes:">{newElection.votes}</Descriptions.Item>
-          <Descriptions.Item label="Diplomacy Type:">{newElection.kind}</Descriptions.Item>
-          <Descriptions.Item label="Candidates:">
-            Count: {newElection.candidates.length}
-            <br />
-            <List
-              style={{ overflow: "auto", height: "10em", width: "36em" }}
-              itemLayout="horizontal"
-              bordered
-              dataSource={newElection.candidates}
-              renderItem={(adr, index) => (
-                <List.Item>
-                  <Address address={adr} ensProvider={mainnetProvider} fontSize="12pt" />
-                </List.Item>
-              )}
-            />
-          </Descriptions.Item>
         </Descriptions>
       </>
     );
@@ -515,7 +465,7 @@ export default function Create({
                   Continue
                 </Button>
               )}
-              {current == 1 && (
+              {/* {current == 1 && (
                 <Button
                   icon={<DoubleRightOutlined />}
                   type="default"
@@ -527,7 +477,7 @@ export default function Create({
                 >
                   Continue
                 </Button>
-              )}
+              )} */}
 
               {current === steps.length - 1 && !isCreatedElection && (
                 <Button
@@ -544,7 +494,7 @@ export default function Create({
 
               {current === steps.length - 1 && isCreatedElection && (
                 <Button icon={<ExportOutlined />} type="default" size="large" shape="round" onClick={viewElection}>
-                  View Election
+                  View Contest
                 </Button>
               )}
             </Col>

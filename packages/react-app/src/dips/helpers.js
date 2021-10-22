@@ -38,6 +38,7 @@ export const serializeCeramicElection = async (ceramicElectionId, address) => {
   const id = toCeramicId(ceramicElectionId);
   const { idx, ceramic } = await makeCeramicClient();
   const electionDoc = await ceramic.loadStream(id);
+  console.log(electionDoc.content);
   const creatorDid = electionDoc.controllers[0];
   let creatorMainAddress = creatorDid;
   const creatorAccounts = await idx.get("cryptoAccounts", creatorDid);
@@ -59,21 +60,27 @@ export const serializeCeramicElection = async (ceramicElectionId, address) => {
     if (Object.keys(creatorAccounts).some(creatorAddress => address === creatorAddress.split("@")[0])) {
       tags.push("admin");
     }
-    if (
-      Object.keys(creatorAccounts).some(creatorAddress =>
-        electionDoc.content.candidates.includes(creatorAddress.split("@")[0]),
-      )
-    ) {
-      tags.push("candidate");
+    if (electionDoc.content.candidates) {
+      if (
+        Object.keys(creatorAccounts).some(creatorAddress =>
+          electionDoc.content.candidates.includes(creatorAddress.split("@")[0]),
+        )
+      ) {
+        tags.push("candidate");
+      }
     }
   }
 
-  const candidateDids = await Promise.all(
-    electionDoc.content.candidates.map(async candidateAddress => {
-      const caip10 = await Caip10Link.fromAccount(ceramic, `${address}@eip155:${network.chainId}`);
-      return caip10.did;
-    }),
-  );
+  let candidateDids = [];
+  if (electionDoc.content.candidates) {
+    candidateDids = await Promise.all(
+      electionDoc.content.candidates.map(async candidateAddress => {
+        const caip10 = await Caip10Link.fromAccount(ceramic, `${address}@eip155:${network.chainId}`);
+        return caip10.did;
+      }),
+    );
+  }
+
   const candidatesSealedBallots = {};
   for (let i = 0; i < candidateDids.length; i++) {
     const candidateDid = candidateDids[i];
@@ -103,10 +110,10 @@ export const serializeCeramicElection = async (ceramicElectionId, address) => {
   const nVoted = Object.keys(candidatesSealedBallots) ? Object.keys(candidatesSealedBallots).length : 0;
 
   //  TODO: payout & total scores
-  const defaultValues = electionDoc.content.candidates.reduce((candidatesAddress, addr) => {
-    candidatesAddress[addr] = 0;
-    return candidatesAddress;
-  }, {});
+  //   const defaultValues = electionDoc.content.candidates.reduce((candidatesAddress, addr) => {
+  //     candidatesAddress[addr] = 0;
+  //     return candidatesAddress;
+  //   }, {});
 
   const ballots = Object.values(candidatesSealedBallots);
   let totalScores = [];
@@ -136,7 +143,7 @@ export const serializeCeramicElection = async (ceramicElectionId, address) => {
     status: electionDoc.content.isActive,
     isPaid: electionDoc.content.isPaid,
     voteAllocation: electionDoc.content.voteAllocation,
-    n_voted: { n_voted: nVoted, outOf: electionDoc.content.candidates.length },
+    n_voted: { n_voted: nVoted, outOf: electionDoc.content.candidates ? electionDoc.content.candidates.length : 0 },
     votes: candidatesSealedBallots,
     totalScores,
     tags: tags,

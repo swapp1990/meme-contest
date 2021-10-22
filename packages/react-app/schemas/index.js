@@ -116,6 +116,23 @@ const ElectionsListSchema = {
           candidates: {
             type: "array",
             items: {
+              type: "object",
+              properties: {
+                address: {
+                  type: "string",
+                  title: "address",
+                  maxLength: 42,
+                },
+                image_url: {
+                  type: "string",
+                  title: "image_url",
+                },
+              },
+            },
+          },
+          candidates_entries: {
+            type: "array",
+            items: {
               type: "string",
               maxLength: 42,
             },

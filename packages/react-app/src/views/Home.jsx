@@ -182,7 +182,7 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
       >
         <PageHeader
           ghost={false}
-          title="Elections"
+          title="Contests"
           extra={[
             <Button
               icon={<PlusOutlined />}
@@ -192,7 +192,7 @@ export default function Home({ tx, readContracts, writeContracts, mainnetProvide
               style={{ margin: 4 }}
               onClick={createElection}
             >
-              Create Election
+              Create Contest
             </Button>,
           ]}
         />

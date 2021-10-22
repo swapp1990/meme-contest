@@ -14,7 +14,7 @@ import { Transactor } from "./helpers";
 import { useBalance, useContractReader, useGasPrice, useOnBlock, useUserProviderAndSigner } from "eth-hooks";
 import { useEventListener } from "eth-hooks/events/useEventListener";
 import { useExchangeEthPrice } from "eth-hooks/dapps/dex";
-import { Home, Reward, Vote, Create } from "./views";
+import { Home, Reward, Vote, Create, Contest } from "./views";
 
 import { useContractConfig, useContractLoader } from "./hooks";
 import Portis from "@portis/web3";
@@ -434,7 +434,6 @@ function App(props) {
     );
   }
 
-  console.log({ yourLocalBalance });
   const [lb, setLb] = useState(yourLocalBalance);
   useEffect(() => {
     setLb(yourLocalBalance);
@@ -492,8 +491,8 @@ function App(props) {
               readContracts={readContracts}
             />
           </Route>
-          <Route path="/vote/:id">
-            <Vote
+          <Route path="/contest/:id">
+            <Contest
               address={address}
               userSigner={userSigner}
               mainnetProvider={mainnetProvider}

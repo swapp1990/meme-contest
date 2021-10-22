@@ -63,6 +63,22 @@ export default function CeramicHandler(tx, readContracts, writeContracts, mainne
     }
   };
 
+  const addCandidate = async id => {
+    const { idx, ceramic } = await makeCeramicClient(address);
+    const election = await serializeCeramicElection(id, address);
+    const elections = await idx.get("elections");
+    console.log({ elections });
+    const electionDoc = await TileDocument.load(ceramic, id);
+    console.log(electionDoc.controllers[0], ceramic.did.id.toString());
+    if (electionDoc.controllers[0] === ceramic.did.id.toString()) {
+      console.log(electionDoc.content);
+      let adds = electionDoc.content.candidates;
+      adds.push(address);
+      const updated = await electionDoc.update({ ...electionDoc.content, candidates: adds });
+      return updated;
+    }
+  };
+
   const endElection = async id => {
     const { idx, ceramic } = await makeCeramicClient(address);
     const electionDoc = await TileDocument.load(ceramic, id);
@@ -207,6 +223,7 @@ export default function CeramicHandler(tx, readContracts, writeContracts, mainne
   return {
     createElection,
     endElection,
+    addCandidate,
     getElections,
     getElectionStateById,
     castBallot,
